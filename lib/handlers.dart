@@ -182,16 +182,36 @@ Router buildRouter(DataStore store) {
 
     final synced = await store.write<List<String>>((s) {
       final list = (s['orders'] as List).cast<Map<String, dynamic>>();
+      final products = (s['products'] as List).cast<Map<String, dynamic>>();
       final saved = <String>[];
       for (final raw in orders) {
-        final id = (raw['id'] as String?)?.trim();
+        final id = ((raw['id'] ?? raw['orderId']) as String?)?.trim();
         if (id == null || id.isEmpty) continue;
         final existing = list.indexWhere((o) => o['id'] == id);
         final record = _mobileOrderToServer(raw);
+        record['id'] = id;
         if (existing >= 0) {
           list[existing] = {...list[existing], ...record};
         } else {
           list.add(record);
+          // Yangi buyurtma — mahsulotlar stock'ini kamaytiramiz
+          final items = (record['items'] as List).cast<Map<String, dynamic>>();
+          for (final it in items) {
+            final pidRaw = it['product_id'];
+            final qty = (it['quantity'] as num?)?.toInt() ?? 0;
+            if (qty <= 0) continue;
+            // product_id mobile-dan integer ham, string ham bo'lishi mumkin
+            final pIndex = products.indexWhere((p) =>
+                p['id'].toString() == pidRaw.toString() ||
+                p['sku']?.toString() == pidRaw.toString() ||
+                p['name'] == it['name']);
+            if (pIndex < 0) continue;
+            final currentStock = (products[pIndex]['stock'] as num?)?.toInt() ?? 0;
+            final newStock = (currentStock - qty).clamp(0, 1 << 31);
+            products[pIndex]['stock'] = newStock;
+            final sold = (products[pIndex]['sold_count'] as num?)?.toInt() ?? 0;
+            products[pIndex]['sold_count'] = sold + qty;
+          }
         }
         saved.add(id);
       }
