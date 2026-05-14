@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: santexnika-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    disk:
+      name: santexnika-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: DATA_DIR
+        value: "/data"
